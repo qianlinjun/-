@@ -19,7 +19,7 @@
 	crossorigin=""></script> -->
    
    
-   
+   <!-- 在线调用D3 js库 -->
    <!-- <script src="https://d3js.org/d3.v5.min.js"></script> -->
     <script src="https://d3js.org/d3.v4.min.js"></script>
    <!-- <script src="//d3js.org/d3.v3.min.js"></script>  -->
@@ -35,9 +35,11 @@
    <!-- 平行坐标数据和依赖库 -->
     <link type="text/css" rel="stylesheet" href="ex.css"/>
     <script type="text/javascript" src="protovis/protovis.js"></script>
-    <script type="text/javascript" src="data/cars.js"></script>
 
-
+	
+	<!-- geojson数据 -->
+	<script src="data/admData.js"></script>
+	<script src="data/cars.js"></script>
 
 	<style>  
 	body {
@@ -50,36 +52,30 @@
 		overflow:hidden;
 	}
 	
-	#mapid
-	{
+	#mapid{
 		left: 5px;
 		top: 5px;
 		height: 80%;
 		width: 55vw;
 	}
 	
-	
-	
-	
-	
-	
-	
-			#fig {
-		  width: 5px;
-		  height: 460px;
-		}
 
-		#title {
-		  position: absolute;
-		  top: 70px;
-		  left: 200px;
-		  padding: 10px;
-		  background: white;
-		}
+	#fig {
+		width: 5px;
+		height: 460px;
+	}
 
-		large {
-		  font-size: medium;
-		}
+	#title {
+		position: absolute;
+		top: 70px;
+		left: 200px;
+		padding: 10px;
+		background: white;
+	}
+
+	large {
+	  font-size: medium;
+	}
 </style>
 </head>
 
@@ -92,13 +88,7 @@
 	<div id="fig"></div>
 	</div>
 
-<!-- 	<div id="graph" class="right">
-	  <svg  width="500" height="250">
-	  </svg>
-	</div> -->
 
-<!-- geojson数据 -->
-<script src="data/us-states.js"></script>
 
 
 <script type="text/javascript+protovis">
@@ -111,8 +101,8 @@
 	}).addTo(map); 
 	
 	
-	// 右上角显示信息
-	var info = L.control();
+	// 右上角显示信息（调试用数据没有多维属性）
+	/*var info = L.control();
 
 	info.onAdd = function (map) {
 		this._div = L.DomUtil.create('div', 'info');
@@ -122,11 +112,11 @@
 
 	info.update = function (props) {
 		this._div.innerHTML = '<h4>US PopulationDensity</h4>'\
-		+ (props ? '<b>' + props.name + '</b><br />' + props.density + ' people / mi<sup>2</sup>'
+		+ (props ? '<b>' + props.NAME + '</b><br />' + props.unemploed + ' people / mi<sup>2</sup>'
 			: 'Hover over a state');//props不为空显示信息
 	};
 
-	info.addTo(map);
+	info.addTo(map);*/
 	
 	
 
@@ -144,14 +134,14 @@
 			layer.bringToFront();
 		}
 
-		info.update(layer.feature.properties);
+		//info.update(layer.feature.properties);
 	}
 
 	var geojson;
 
 	function resetHighlight(e) {
 		geojson.resetStyle(e.target);
-		info.update();
+		//info.update();
 	}
 
 	function zoomToFeature(e) {
@@ -178,7 +168,7 @@
 							'#FFEDA0';
 	}
 
-	//feature是一个geojson 传实参时要对应(我的理解)
+	
 	function style(feature) {
 		return {
 			weight: 2,
@@ -186,13 +176,13 @@
 			color: 'white',
 			dashArray: '3',
 			fillOpacity: 0.7,
-			fillColor: getColor(feature.properties.density)//不是提前知道对象的属性，对对象作了属性约束
+			fillColor: getColor(feature.properties.unemploed)//不是提前知道对象的属性，对象作了属性约束
 		};
 	}
 
 	
 	//添加geojson数据
-	geojson = L.geoJson(statesData, {
+	geojson = L.geoJson(admData, {
 		style: style,//style方法
 		onEachFeature: onEachFeature//onEachFeature方法
 	}).addTo(map);
@@ -230,17 +220,40 @@
 	
 	
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
+//获取geoJson中的多维数据
+function getData()
+{
+	var provData = admData.features;//provData是多维数组
+	var data = new Array();//储存每个省的多维数据
+	for(var i in cars)
+	{
+		//data.push(provData[i].properties);
+		data.push(cars[i]);
+		//console.log(provData[i].properties);
+	}
+	return data;
+}
+var data=getData();
+console.log(data);
+console.log(cars);
+	  
+
 	
 	// The units and dimensions to visualize, in order.
+
+/*
+var units = {
+  GDP: {name: "GDP", unit: ""},
+  GDPpp: {name: "GDPpp", unit: ""},
+  consumlev: {name: "consumlev", unit: ""},
+  unemploed: {name: "unemploed", unit: " sec"},
+  healthPwan: {name: "healthPwan", unit: " mpg"},
+  doctorPwan: {name: "doctorPwan", unit: ""},
+  dieRate:{name:"dieRate",unit:""}
+}*/
+
+
+
 var units = {
   cyl: {name: "cylinders", unit: ""},
   dsp: {name: "displacement", unit: " sq in"},
@@ -249,9 +262,10 @@ var units = {
   acc: {name: "acceleration (0-60 mph)", unit: " sec"},
   mpg: {name: "mileage", unit: " mpg"},
   year: {name: "year", unit: ""}
-}
+}	
 
-//维度
+
+//维度(包括数据的key)
 var dims = pv.keys(units);
 
 /* Sizing and scales. */
@@ -260,12 +274,12 @@ var w = 520,
     fudge = 0.5,
     x = pv.Scale.ordinal(dims).splitFlush(0, w),
     y = pv.dict(dims, function(t) pv.Scale.linear(
-        cars.filter(function(d) !isNaN(d[t])),
+        data.filter(function(d) !isNaN(d[t])),
         function(d) Math.floor(d[t])-fudge,
         function(d) Math.ceil(d[t]) +fudge
         ).range(0, h)),
     c = pv.dict(dims, function(t) pv.Scale.linear(
-        cars.filter(function(d) !isNaN(d[t])),
+        data.filter(function(d) !isNaN(d[t])),
         function(d) Math.floor(d[t])-fudge,
         function(d) Math.ceil(d[t]) +fudge
         ).range("steelblue", "brown"));
@@ -286,7 +300,7 @@ var vis = new pv.Panel()
 
 // The parallel coordinates display.
 vis.add(pv.Panel)
-    .data(cars)
+    .data(data)
     .visible(function(d) dims.every(function(t)
         (d[t] >= filter[t].min) && (d[t] <= filter[t].max)))
     .add(pv.Line)
@@ -312,7 +326,7 @@ rule.anchor("top").add(pv.Label)
 var change = vis.add(pv.Panel);
 
 var line = change.add(pv.Panel)
-    .data(cars)
+    .data(data)
     .visible(function(d) dims.every(function(t)
         (d[t] >= filter[t].min) && (d[t] <= filter[t].max)))
   .add(pv.Line)
@@ -381,21 +395,6 @@ var handle = change.add(pv.Panel)
 
 	vis.render();
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-
 </script>
 </body>
 </html>
