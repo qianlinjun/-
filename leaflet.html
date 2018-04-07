@@ -1,0 +1,561 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<!-- 希望加上PCA数据 -->
+	<title>index</title>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+
+	<!-- 在线调用leaflet js库	-->
+	<!-- Include Leaflet CSS file in the head section of your document: -->
+<!-- 	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css"
+	integrity="sha512-Rksm5RenBEKSKFjgI3a41vrjkw4EVPlJ3+OiI65vTjIdo9brlAacEuKOiQ5OFh7cOI1bkDwLqdLw3Zg0cRJAAQ=="
+	crossorigin=""/>
+   
+	<!-- Make sure you put this AFTER Leaflet's CSS
+	<script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"
+	integrity="sha512-/Nsx9X4HebavoBvEBuyp3I7od5tA0UzAxs+j83KgC8PU0kgB4XiK4Lfe4y4cgBtaRJQEIFCW+oC506aPT2L1zw=="
+	crossorigin=""></script> -->
+   
+   
+   <!-- 本地调用leaflet js库-->
+   <link href="leaflet/leaflet.css" type="text/css" rel="stylesheet"/>
+    <script src="leaflet/leaflet.js"></script>
+   <!-- <script src="leaflet/leaflet.ChineseTmsProviders.js"></script> -->
+
+	
+	<!-- geojson数据(固定数据写法) -->
+<!-- 	<script src="data/admData.js"></script> -->
+	
+	
+	
+	<!-- SlickGrid -->
+<link rel="stylesheet" href="lib/slickgrid/slick.grid.css" type="text/css"/>
+<link rel="stylesheet" href="lib/slickgrid/jquery-ui-1.8.16.custom.css" type="text/css"/>
+<link rel="stylesheet" href="lib/slickgrid/examples.css" type="text/css"/>
+<link rel="stylesheet" href="lib/slickgrid/slick.pager.css" type="text/css"/>
+<script src="lib/slickgrid/jquery-1.7.min.js"></script>
+<script src="lib/slickgrid/jquery.event.drag-2.0.min.js"></script>
+<script src="lib/slickgrid/slick.core.js"></script>
+<script src="lib/slickgrid/slick.grid.js"></script>
+<script src="lib/slickgrid/slick.pager.js"></script>
+<script src="lib/slickgrid/slick.dataview.js"></script>
+<!-- End SlickGrid -->
+
+<link rel="stylesheet" type="text/css" href="d3.parcoords.css">
+<link rel="stylesheet" type="text/css" href="style.css">
+
+<!-- 调用本地库 -->
+<script src="lib/d3.min.js"></script>
+<script src="d3.parcoords.js"></script>
+<script src="lib/divgrid.js"></script>
+
+<script src="lib/math.js"></script>
+
+<!-- absolute相对父级元素 relative 相对正常位置 fix相对窗口	-->
+	<style>  		
+	html,body{
+		height: 95%;
+		overflow:hidden;
+	}
+	body {
+		padding: 10;
+		margin: 10;
+	}
+	#parent{
+		display: table;
+		height: 100%;
+		width: 100vw;
+	}
+		#left{
+			position:relative;
+			display: table-cell;
+			left: 20px;
+			height: 100%;
+			width: 40vw;
+		}
+			#uploader{
+			display: table-cell;
+				height: 5%;
+			}
+			#mapid{
+			display: table-cell;
+				height: 30vw;
+				width: 35vw;
+			}
+		#right{
+			position:relative;
+			display: table-cell;
+			left: -20px;
+			height: 100%;
+			width: 60vw;
+		}
+			#graph{
+				position:absolute;
+				display: table-cell;
+			}
+			
+			#grid, #pager {
+			  position: absolute;
+			  display: table-cell;
+			  width: 55vw;
+			}
+			#grid {
+			  top:400px;
+			  height: 250px;
+			}
+			#pager {
+			  bottom: 250px;
+			  height: 20px;
+			}
+			
+			.slick-row:hover {
+			  font-weight: bold;
+			  color: #069;
+			}
+</style>
+</head>
+
+
+<body>
+
+<div id=parent> 
+	<div id="left">
+		<input type="file" id="uploader">
+		<div id="mapid"></div>
+		<select id="myselect" onchange="selectOnchange(this)">
+		</select>
+		
+		<br><br>
+		<span style="font-size:15px;">数据聚类：</span>
+
+		
+		<button>Kmeans</button>
+		<input type="text" size="3" value="k" onfocus="if (value =='k'){value =''}"onblur="if (value ==''){value='k'}"></input>
+		&nbsp;
+		<button>SOM</button>
+		
+		<br>
+		<input type="checkbox" name="vehicle" value="Bike" checked="checked" />
+		<br/>
+		I have a car: 
+		<input type="checkbox" name="vehicle" value="Car" />
+		<br/>
+		I have an airplane: 
+		<input type="checkbox" name="vehicle" value="Airplane" />
+		<br/><br/>
+
+	</div>
+		
+	<div id="right">
+		<div id="graph" class="parcoords"></div>
+		<div id="grid"></div>
+		<div id="pager"></div>	
+	</div>
+</div>
+	
+
+<script> 
+	let select = document.getElementById("myselect");//下拉框负责选择地图渲染字段
+	
+	let map = L.map('mapid').setView([38, 105.5], 3);//纬度 经度
+
+	L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoicWlhbmxpbmp1biIsImEiOiJjajFxbWc0ZHMwMGo1Mndubzc4eThmZGZpIn0.JJh2nz7R7FY6iE7sfZi_iQ', {
+		maxZoom: 18,
+		attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors,<a href="http://mapbox.com">Mapbox</a> data &copy; <a href="http://www.stats.gov.cn/">China Census Bureau</a>',
+		id: 'mapbox.light'
+	}).addTo(map); 
+	
+	// 右上角显示信息（调试用数据没有多维属性）
+	let info = L.control();
+	info.onAdd = function (map) {
+		this._div = L.DomUtil.create('div', 'info');
+		this.update();
+		return this._div;
+	};
+	info.update = function (props) {
+		this._div.innerHTML = '<h4>分地区统计数据 By</h4>'+ (props ? '<b>' + props.NAME + '</b><br />' + props.unemploed + ' people / mi<sup>2</sup>': '');//props不为空显示信息
+	};
+	info.addTo(map);
+	
+	
+    //高亮显示
+	function highlightFeature(e) {
+		let layer = e.target;
+		console.log(arguments);
+
+		layer.setStyle({
+			weight: 5,
+			color: '#666',
+			dashArray: '',
+			fillOpacity: 0.7
+		});
+
+		if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+			layer.bringToFront();
+		}
+
+		info.update(layer.feature.properties);
+		
+
+		//使用鼠标实现 地图和平行坐标联动
+		parcoords.highlight([jsonArrayData[e.target.feature.properties.id]]);
+	}
+
+	
+	//geoJson数据 加载到地图上
+ 	let geoJsonData = undefined;
+	//json数组 包括geoJson的多维属性信息 用于图表可视化
+	let jsonArrayData = undefined;
+	//geoJson数据对象
+	let geoJsonLayer = undefined;
+
+	function resetHighlight(e) {
+		geoJsonLayer.resetStyle(e.target);//重新调用style
+		info.update();
+		parcoords.unhighlight();
+	}
+
+	function zoomToFeature(e) {
+		map.fitBounds(e.target.getBounds());
+	}
+
+	//响应鼠标事件
+	function onEachFeature(feature, layer) {
+		layer.on({
+			mouseover: highlightFeature,
+			mouseout: resetHighlight,
+			//click: zoomToFeature
+		});
+	}
+	
+	//渲染字段最小/大值
+	let minValue = undefined ,maxValue= undefined;
+	// 根据密度赋值颜色
+	function getColor(value) {
+		//下拉框字段是数字 拼音等只返回一种颜色
+		if(typeof value === "number"){
+			let d = undefined; d =(value-minValue)/(maxValue-minValue)*100;
+			console.log("d:"+d+" "+"value:"+value+" "+"minValue:"+minValue+" "+"maxValue:"+maxValue);
+			 return d > 90 ? '#800026' :
+					d > 70  ? '#BD0026' :
+					d > 60  ? '#E31A1C' :
+					d > 50  ? '#FC4E2A' :
+					d > 40   ? '#FD8D3C' :
+					d > 30   ? '#FEB24C' :
+					d > 20   ? '#FED976' :
+								'#FFEDA0';
+		}
+		
+		//下拉框字段 代表的值是ID 名称 拼音等只返回一种颜色
+		return '#FED976';				
+		//根据数据添加图例
+	}
+	
+	//响应下拉框更改事件 首先找到对应字段值的min max 根据字段value改变地图渲染字段
+	function selectOnchange(obj){
+	    let opt = obj.options[obj.selectedIndex];
+		let value = jsonArrayData[0][select.options[select.selectedIndex].text];
+
+		
+		if(typeof value === "number"){
+			minValue=Number.POSITIVE_INFINITY;
+			maxValue=0;
+			for(let i=0; i<jsonArrayData.length; i++)
+			{
+				let v = jsonArrayData[i][opt.text];console.log(i);
+				minValue = v < minValue ? v : minValue;
+				maxValue = v > maxValue ? v : maxValue;
+			}
+					
+		}		
+		 
+
+		//console.log(opt.text+"("+opt.value+")");
+		//根据select属性 更改地图渲染字段
+		addData2map(geoJsonData);
+	}
+
+	//动态返回样式
+	function style(feature) {
+	    //console.log(feature.properties[select.options[select.selectedIndex].text]);//ok
+		return {
+			weight: 2,
+			opacity: 1,
+			color: 'white',
+			dashArray: '3',
+			fillOpacity: 0.7,
+			fillColor: getColor(feature.properties[select.options[select.selectedIndex].text])//
+		};
+	}
+
+	//地图加载数据
+	function addData2map(data){  
+		if(typeof(data) != "undefined")
+			geoJsonLayer = L.geoJson(data, {
+				style: style,//style方法
+				onEachFeature: onEachFeature//onEachFeature方法
+			}).addTo(map);
+	}
+
+	//添加图例
+	function addLegend(){
+		let legend = L.control({position: 'bottomright'});
+
+		legend.onAdd = function (map) {
+
+			let div = L.DomUtil.create('div', 'info legend'),
+				grades = [0, 10, 20, 50, 100, 200, 500, 1000],
+				labels = [],
+				from, to;
+
+			for (let i = 0; i < grades.length; i++) {
+				from = grades[i];
+				to = grades[i + 1];
+
+				labels.push(
+					'<i style="background:' + getColor(from + 1) + '"></i> ' +
+					from + (to ? '&ndash;' + to : '+'));
+			}
+
+			div.innerHTML = labels.join('<br>');
+			return div;
+		};
+
+		legend.addTo(map);
+	}
+    addLegend();
+	
+	function jsonArray2matrix(jsonArray){
+	console.log(jsonArray);
+		let arrayData = [];// Array
+		
+		let rows = jsonArray.length;
+		let colums = undefined;
+		for(let i=0;i< rows;i++)
+		{
+		    let array=[];
+			for(let key in jsonArray[i])
+			{
+				if(typeof jsonArray[i][key] === "number")
+					array.push(jsonArray[i][key]);
+			}
+				
+			arrayData.push(array);	  
+		}
+		
+		
+		
+		console.log(arrayData);
+		//return math.matrix(arrayData);  // Matrix
+
+	}
+	//归一化 min-max标准化
+	function normollize(dataArray){
+
+	
+	}
+	function getDist(p1,p2,dim)
+	{
+	
+	}
+ 	//对数据进行聚类 显示到地图上
+	function kmeans(dataArray,k,){
+	    let cluster=[];//储存类别
+	
+	}
+
+
+	
+	
+<!-- 图表部分--> 
+	  
+//按属性数据分布设置平行坐标色彩
+let blue_to_brown = d3.scale.linear()
+  .domain([9, 50])
+  .range(["steelblue", "brown"])
+  .interpolate(d3.interpolateLab);
+
+let color = function(d) { return blue_to_brown(d['id']); };
+
+	  
+	  
+	  //parcoords初始化
+ let parcoords = d3.parcoords()("#graph")
+	.color(color)
+	.alpha(0.4)
+	.mode("queue") // progressive rendering
+	.height(320)//d3.max([document.body.clientHeight-326, 220])
+	.width(800)
+	.margin({
+	  top: 36,
+	  left: 10,
+	  right: 0,
+	  bottom: 16
+	});
+
+
+function addData2chart(data) {
+   if(typeof(data) != "undefined"){
+	  
+	  //设置平行坐标
+	  parcoords
+		.data(data)//设置数据来源
+		.hideAxis(["NAME","pinyin"])//设置不显示字段
+		.render()
+		.reorderable()
+		.brushMode("1D-axes");
+
+		
+	  // 设置表格
+	  // slickgrid needs each data element to have an id
+	  data.forEach(function(d,i) { d.id = d.id || i;});
+	  
+	  let column_keys = d3.keys(data[0]);//column_keys 属性名称  
+	  
+	  //地图下面的下拉框添加属性
+	    for(let i in column_keys)
+			select.options.add(new Option(column_keys[i],i)); //这个兼容IE与firefox 
+	  
+	  let columns = column_keys.map(function(key,i) {
+	  //key 名称 i 索引
+		return {
+		  id: key,
+		  name: key,
+		  field: key,
+		  sortable: true
+		}
+	  });
+
+	  let options = {
+		enableCellNavigation: true,
+		enableColumnReorder: false,
+		multiColumnSort: false
+	  };
+
+	  let dataView = new Slick.Data.DataView();
+	  let grid = new Slick.Grid("#grid", dataView, columns, options);
+	  let pager = new Slick.Controls.Pager(dataView, grid, $("#pager"));
+
+	  // wire up model events to drive the grid
+	  dataView.onRowCountChanged.subscribe(function (e, args) {
+		grid.updateRowCount();
+		grid.render();
+	  });
+
+	  dataView.onRowsChanged.subscribe(function (e, args) {
+		grid.invalidateRows(args.rows);
+		grid.render();
+	  });
+
+	  // column sorting
+	  let sortcol = column_keys[0];
+	  let sortdir = 1;
+
+	  function comparer(a, b) {
+		let x = a[sortcol], y = b[sortcol];
+		return (x == y ? 0 : (x > y ? 1 : -1));
+	  }
+	  
+	  // 点击头部进行排序
+	  grid.onSort.subscribe(function (e, args) {
+		sortdir = args.sortAsc ? 1 : -1;
+		sortcol = args.sortCol.field;
+
+		if ($.browser.msie && $.browser.version <= 8) {
+		  dataView.fastSort(sortcol, args.sortAsc);
+		} else {
+		  dataView.sort(comparer, args.sortAsc);
+		}
+	  });
+
+	  // 鼠标移动时高亮显示
+	  grid.onMouseEnter.subscribe(function(e,args) {
+		// Get row number from grid
+		let grid_row = grid.getCellFromEvent(e).row;
+
+		// Get the id of the item referenced in grid_row
+		let item_id = grid.getDataItem(grid_row).id;
+		let d = parcoords.brushed() || data;//如果第一个false返回第二个 第一个true返回第二个
+
+		// Get the element position of the id in the data object
+		elementPos = d.map(function(x) {return x.id; }).indexOf(item_id);
+
+		// Highlight that element in the parallel coordinates graph
+		parcoords.highlight([d[elementPos]]);
+	  });
+
+	  grid.onMouseLeave.subscribe(function(e,args) {
+		parcoords.unhighlight();
+	  });
+
+	  // fill grid with data
+	  gridUpdate(data);
+
+	  // update grid on brush
+	  parcoords.on("brush", function(d) {
+		gridUpdate(d);
+	  });
+
+	  function gridUpdate(data) {
+		dataView.beginUpdate();
+		dataView.setItems(data);
+		dataView.endUpdate();
+	  };
+}//if
+}
+
+
+
+
+//从geoJson中获取多维数据 加载到可视化图形上
+function geoJson2Array(geoJsonData)
+{
+	let geoJsonArray = geoJsonData.features;//provData是geoJson多维数组
+	let data = new Array();//储存每个省的多维数据
+	for(let i in geoJsonArray)
+		data.push(geoJsonArray[i].properties);
+	return data;
+}
+
+
+//动态加载数据文件 加载到地图和图表上
+let uploader = document.getElementById("uploader");  
+let reader = new FileReader();
+	
+//定制加载事件
+reader.onload = function(e) {
+  let contents = e.target.result;
+  //let data = d3.csv.parse(contents);
+  geoJsonData = eval('(' + contents + ')');//geoJson字符串转为geoJson数据
+  
+  // 加载数据创建平行坐标和表格
+  jsonArrayData = geoJson2Array(geoJsonData);
+  jsonArray2matrix(jsonArrayData);
+  
+  addData2chart(jsonArrayData);
+  
+  //地图添加geojson数据
+  addData2map(geoJsonData);
+  
+  
+  // remove button, since re-initializing doesn't work for now
+  //uploader.parentNode.removeChild(uploader);
+};
+
+
+uploader.addEventListener("change", handleFiles, false);  
+
+function handleFiles() {
+  let file = this.files[0];
+  reader.readAsText(file);
+};
+	
+</script>
+</body>
+</html>
+
+
+
+
