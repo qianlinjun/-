@@ -52,11 +52,12 @@
 <script src="lib/divgrid.js"></script>
 
 <script src="lib/math.js"></script>
+<script src="lib/kmeans.js"></script>
 
 <!-- absolute相对父级元素 relative 相对正常位置 fix相对窗口	-->
 	<style>  		
 	html,body{
-		height: 95%;
+		height: 100%;
 		overflow:hidden;
 	}
 	body {
@@ -72,7 +73,7 @@
 			position:relative;
 			display: table-cell;
 			left: 20px;
-			height: 100%;
+			height: 120%;
 			width: 40vw;
 		}
 			#uploader{
@@ -106,7 +107,7 @@
 			  height: 250px;
 			}
 			#pager {
-			  bottom: 250px;
+			  bottom: 300px;
 			  height: 20px;
 			}
 			
@@ -131,21 +132,12 @@
 		<span style="font-size:15px;">数据聚类：</span>
 
 		
-		<button>Kmeans</button>
-		<input type="text" size="3" value="k" onfocus="if (value =='k'){value =''}"onblur="if (value ==''){value='k'}"></input>
+		<button onclick = "clusterKmeans()">Kmeans</button>
+		<input type="text" size="3" id="input_k" value="5" onfocus="if (value =='5'){value =''}"onblur="if (value ==''){value='5'}"></input>
 		&nbsp;
 		<button>SOM</button>
-		
-		<br>
-		<input type="checkbox" name="vehicle" value="Bike" checked="checked" />
-		<br/>
-		I have a car: 
-		<input type="checkbox" name="vehicle" value="Car" />
-		<br/>
-		I have an airplane: 
-		<input type="checkbox" name="vehicle" value="Airplane" />
-		<br/><br/>
-
+		<input type="text" size="3" id="input_node" value="5" onfocus="if (value =='5'){value =''}"onblur="if (value ==''){value='5'}"></input>
+		<br><br>
 	</div>
 		
 	<div id="right">
@@ -157,10 +149,20 @@
 	
 
 <script> 
+	//数据
+ 	let geoJsonData = undefined;//geoJson数据 加载到地图上
+	let jsonArrayData = undefined;//geoJson数据提取的json数组
+	let arrayData = undefined;//聚类
+	let mLayer = undefined;//leaflet geoJson数据层
+	//UI
 	let select = document.getElementById("myselect");//下拉框负责选择地图渲染字段
 	
+	//kmeans类
+	let km = undefined;
+	
+	
+	
 	let map = L.map('mapid').setView([38, 105.5], 3);//纬度 经度
-
 	L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoicWlhbmxpbmp1biIsImEiOiJjajFxbWc0ZHMwMGo1Mndubzc4eThmZGZpIn0.JJh2nz7R7FY6iE7sfZi_iQ', {
 		maxZoom: 18,
 		attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors,<a href="http://mapbox.com">Mapbox</a> data &copy; <a href="http://www.stats.gov.cn/">China Census Bureau</a>',
@@ -183,7 +185,6 @@
     //高亮显示
 	function highlightFeature(e) {
 		let layer = e.target;
-		console.log(arguments);
 
 		layer.setStyle({
 			weight: 5,
@@ -203,16 +204,9 @@
 		parcoords.highlight([jsonArrayData[e.target.feature.properties.id]]);
 	}
 
-	
-	//geoJson数据 加载到地图上
- 	let geoJsonData = undefined;
-	//json数组 包括geoJson的多维属性信息 用于图表可视化
-	let jsonArrayData = undefined;
-	//geoJson数据对象
-	let geoJsonLayer = undefined;
 
 	function resetHighlight(e) {
-		geoJsonLayer.resetStyle(e.target);//重新调用style
+		mLayer.resetStyle(e.target);//重新调用style
 		info.update();
 		parcoords.unhighlight();
 	}
@@ -231,13 +225,12 @@
 	}
 	
 	//渲染字段最小/大值
-	let minValue = undefined ,maxValue= undefined;
+	let min_field = undefined ,max_field= undefined;
 	// 根据密度赋值颜色
-	function getColor(value) {
+	function getColor(value) {		
 		//下拉框字段是数字 拼音等只返回一种颜色
 		if(typeof value === "number"){
-			let d = undefined; d =(value-minValue)/(maxValue-minValue)*100;
-			console.log("d:"+d+" "+"value:"+value+" "+"minValue:"+minValue+" "+"maxValue:"+maxValue);
+			let d = undefined; d =(value-min_field)/(max_field-min_field)*100;
 			 return d > 90 ? '#800026' :
 					d > 70  ? '#BD0026' :
 					d > 60  ? '#E31A1C' :
@@ -260,26 +253,21 @@
 
 		
 		if(typeof value === "number"){
-			minValue=Number.POSITIVE_INFINITY;
-			maxValue=0;
+			min_field=Number.POSITIVE_INFINITY;
+			max_field=0;
 			for(let i=0; i<jsonArrayData.length; i++)
 			{
-				let v = jsonArrayData[i][opt.text];console.log(i);
-				minValue = v < minValue ? v : minValue;
-				maxValue = v > maxValue ? v : maxValue;
-			}
-					
+				let v = jsonArrayData[i][opt.text];
+				min_field = v < min_field ? v : min_field;
+				max_field = v > max_field ? v : max_field;
+			}	
 		}		
-		 
-
-		//console.log(opt.text+"("+opt.value+")");
 		//根据select属性 更改地图渲染字段
-		addData2map(geoJsonData);
+		freshMap(geoJsonData);
 	}
 
 	//动态返回样式
 	function style(feature) {
-	    //console.log(feature.properties[select.options[select.selectedIndex].text]);//ok
 		return {
 			weight: 2,
 			opacity: 1,
@@ -293,10 +281,23 @@
 	//地图加载数据
 	function addData2map(data){  
 		if(typeof(data) != "undefined")
-			geoJsonLayer = L.geoJson(data, {
+		{
+			mLayer = L.geoJson(data, {
 				style: style,//style方法
 				onEachFeature: onEachFeature//onEachFeature方法
 			}).addTo(map);
+		}
+	}
+	
+	//更新地图
+	function freshMap(data){  
+		if(typeof(data) != "undefined")
+		{
+			mLayer = L.geoJson(data, {
+				style: style,//style方法
+				onEachFeature: onEachFeature//onEachFeature方法
+			}).addTo(map);
+		}
 	}
 
 	//添加图例
@@ -327,47 +328,146 @@
 	}
     addLegend();
 	
-	function jsonArray2matrix(jsonArray){
-	console.log(jsonArray);
-		let arrayData = [];// Array
-		
-		let rows = jsonArray.length;
-		let colums = undefined;
-		for(let i=0;i< rows;i++)
+	
+	//动态添加checkbox for 选择聚类字段
+	function addCheckbox(jsonArray){
+		for(let key in jsonArray[0])
 		{
-		    let array=[];
-			for(let key in jsonArray[i])
+			let mcheckbox=document.createElement("input");
+			mcheckbox.setAttribute("type","checkbox");
+			mcheckbox.setAttribute("class","check_Kmeans");
+			mcheckbox.setAttribute("id",key);
+			mcheckbox.setAttribute("value",key);
+			let label=document.createElement("span");
+			label.style.fontSize = '15px';
+			label.innerHTML = key;
+			
+			let mydiv=document.getElementById("left");
+			mydiv.appendChild(mcheckbox);
+			mydiv.appendChild(label);
+		}
+	}
+	
+	
+	
+	<!-- 聚类功能 -->
+	
+	/*将json数组转为二维数组
+	*@jsonArrayjson数组
+	*@fields可选 指定要转换的字段名称
+	*/
+	function jsonArray2Array(jsonArray,fields){
+		if(jsonArray != undefined){
+			let _arrayData = [];// Array
+			
+			let rows = jsonArray.length;
+			let colums = undefined;
+			for(let i=0;i< rows;i++)
 			{
-				if(typeof jsonArray[i][key] === "number")
-					array.push(jsonArray[i][key]);
+				let array=[];
+				for(let key in jsonArray[i])
+				{
+					if(typeof jsonArray[i][key] === "number" && (fields != undefined ? fields.indexOf(key) >= 0 : 1))
+						array.push(jsonArray[i][key]);
+						
+				}
+				if(array.length > 0)
+				_arrayData.push(array);	  
 			}
+			//console.log(jsonArray);
+			//console.log(_arrayData);
+			return _arrayData;  // Matrix
+		}
+	}
+	
+	//归一化 min-max标准化
+	function normollize(arrayOrigin){
+		let arrayOld = arrayOrigin;
+		if(arrayOld != undefined)
+		{
+			let rows = arrayOld.length;//行数			
+			let colums = arrayOld[0].length;//列数
+			
+			//对列遍历 通过map对行遍历
+			for(let i =0;i<colums;i++)
+			{
+				let minValue = Number.POSITIVE_INFINITY;
+				let maxValue = 0;
+				arrayOld.map(function(row){
+						minValue = row[i] < minValue ? row[i] : minValue;
+						maxValue = row[i] > maxValue ? row[i] : maxValue;
+				});
 				
-			arrayData.push(array);	  
+				arrayOld.map(function(row,row_i){
+					arrayOld[row_i][i] = (row[i] - minValue)/(maxValue - minValue);					
+				});
+			}
+			return arrayOld;
+		}
+	}
+
+	
+	//页面添加聚类结果
+	function showClusterResult(cluster){
+	
+		let mydiv=document.getElementById("left");
+		for(let i in cluster)
+		{	
+			let clusterResult=document.createElement("p");
+			let s="类"+(i*1+1)+":";
+			for(let j in cluster[i])
+			{
+				s += jsonArrayData[cluster[i][j]].NAME;//败笔
+				s +=" ";
+			}
+			
+			clusterResult.innerHTML = s;
+			clusterResult.style.fontSize = '13px';
+			clusterResult.style.color = 'green';
+			
+			mydiv.appendChild(clusterResult);
+		}
+
+}
+	
+	//作为button onclick回调函数
+	function clusterKmeans(){
+		let k = document.getElementById("input_k").value*1;
+		km = new kMeans({
+			K: typeof k == "number" ? k:5,//默认聚成5类
+			maxIterations:10000,
+			enableConvergenceTest:false
+		});
+		
+		//获取聚类字段 in checkbox
+		let mCheckBoxs = undefined;
+		let clusterFields = [];
+		mCheckBoxs = document.getElementsByClassName("check_Kmeans");
+		for(let key in mCheckBoxs)
+		{
+			if(mCheckBoxs[key].checked)
+			clusterFields.push(mCheckBoxs[key].value);
 		}
 		
-		
-		
-		console.log(arrayData);
-		//return math.matrix(arrayData);  // Matrix
-
+		let clusterData = jsonArray2Array(jsonArrayData,clusterFields);
+		if(clusterData.length > 0)
+		{
+			clusterData = normollize(clusterData);
+			
+			km.cluster(clusterData);
+			while (km.step()) {
+				km.findClosestCentroids();
+				km.moveCentroids();
+				if(km.hasConverged()) break;
+			}
+			console.log('Finished in:', km.currentIteration, ' iterations');
+			console.log(km.centroids, km.clusters);//聚类结果
+			showClusterResult(km.clusters);
+		}
 	}
-	//归一化 min-max标准化
-	function normollize(dataArray){
-
 	
-	}
-	function getDist(p1,p2,dim)
-	{
-	
-	}
- 	//对数据进行聚类 显示到地图上
-	function kmeans(dataArray,k,){
-	    let cluster=[];//储存类别
-	
-	}
 
 
-	
 	
 <!-- 图表部分--> 
 	  
@@ -510,7 +610,7 @@ function addData2chart(data) {
 
 
 //从geoJson中获取多维数据 加载到可视化图形上
-function geoJson2Array(geoJsonData)
+function geoJson2jsonArray(geoJsonData)
 {
 	let geoJsonArray = geoJsonData.features;//provData是geoJson多维数组
 	let data = new Array();//储存每个省的多维数据
@@ -531,14 +631,15 @@ reader.onload = function(e) {
   geoJsonData = eval('(' + contents + ')');//geoJson字符串转为geoJson数据
   
   // 加载数据创建平行坐标和表格
-  jsonArrayData = geoJson2Array(geoJsonData);
-  jsonArray2matrix(jsonArrayData);
+  jsonArrayData = geoJson2jsonArray(geoJsonData);
+  arrayData = jsonArray2Array(jsonArrayData);
+  
   
   addData2chart(jsonArrayData);
   
   //地图添加geojson数据
   addData2map(geoJsonData);
-  
+  addCheckbox(jsonArrayData);
   
   // remove button, since re-initializing doesn't work for now
   //uploader.parentNode.removeChild(uploader);
