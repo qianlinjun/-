@@ -88,7 +88,7 @@
 		#right{
 			position:relative;
 			display: table-cell;
-			left: -20px;
+			left: 5px;
 			height: 100%;
 			width: 60vw;
 		}
@@ -329,22 +329,29 @@
     addLegend();
 	
 	
-	//动态添加checkbox for 选择聚类字段
-	function addCheckbox(jsonArray){
+	/*批量动态添加checkbox
+	*@jsonArray必选 数据
+	*@mDiv必选 指定添加地方
+	*@classname必选 指定classname
+	*@callback可选 响应checkbox点击事件
+	*/
+	function addCheckbox(jsonArray,mDiv,callback){
 		for(let key in jsonArray[0])
 		{
 			let mcheckbox=document.createElement("input");
 			mcheckbox.setAttribute("type","checkbox");
-			mcheckbox.setAttribute("class","check_Kmeans");
+			mcheckbox.setAttribute("class","checkboxs");
 			mcheckbox.setAttribute("id",key);
 			mcheckbox.setAttribute("value",key);
+			//响应点击
+			if(callback != undefined)
+				mcheckbox.addEventListener('click', callback);
 			let label=document.createElement("span");
 			label.style.fontSize = '15px';
 			label.innerHTML = key;
 			
-			let mydiv=document.getElementById("left");
-			mydiv.appendChild(mcheckbox);
-			mydiv.appendChild(label);
+			mDiv.appendChild(mcheckbox);
+			mDiv.appendChild(label);
 		}
 	}
 	
@@ -460,8 +467,8 @@
 				km.moveCentroids();
 				if(km.hasConverged()) break;
 			}
-			console.log('Finished in:', km.currentIteration, ' iterations');
-			console.log(km.centroids, km.clusters);//聚类结果
+			//console.log('Finished in:', km.currentIteration, ' iterations');
+			//console.log(km.centroids, km.clusters);//聚类结果
 			showClusterResult(km.clusters);
 		}
 	}
@@ -479,33 +486,33 @@ let blue_to_brown = d3.scale.linear()
 
 let color = function(d) { return blue_to_brown(d['id']); };
 
-	  
-	  
-	  //parcoords初始化
- let parcoords = d3.parcoords()("#graph")
-	.color(color)
-	.alpha(0.4)
-	.mode("queue") // progressive rendering
-	.height(320)//d3.max([document.body.clientHeight-326, 220])
-	.width(800)
-	.margin({
-	  top: 36,
-	  left: 10,
-	  right: 0,
-	  bottom: 16
-	});
+let parcoords = undefined;
 
-
-function addData2chart(data) {
+function addData2chart(data,hideFields) {
+	document.getElementById('graph').innerHTML = '';
+   
    if(typeof(data) != "undefined"){
-	  
+	
+	parcoords = d3.parcoords()("#graph")
+		.color(color)
+		.alpha(0.4)
+		.mode("queue") // progressive rendering
+		.height(320)//d3.max([document.body.clientHeight-326, 220])
+		.width(800)
+		.margin({
+		  top: 36,
+		  left: 10,
+		  right: 0,
+		  bottom: 16
+		});
+		
 	  //设置平行坐标
 	  parcoords
 		.data(data)//设置数据来源
-		.hideAxis(["NAME","pinyin"])//设置不显示字段
+		.hideAxis(hideFields)//设置不显示字段 ["NAME","pinyin"]
 		.render()
 		.reorderable()
-		.brushMode("1D-axes");
+		.brushMode("1D-axes");	
 
 		
 	  // 设置表格
@@ -635,11 +642,27 @@ reader.onload = function(e) {
   arrayData = jsonArray2Array(jsonArrayData);
   
   
-  addData2chart(jsonArrayData);
+  let hideFields=[];//平行坐标隐藏字段
+  addData2chart(jsonArrayData,hideFields);
   
   //地图添加geojson数据
   addData2map(geoJsonData);
-  addCheckbox(jsonArrayData);
+  
+  //left div添加checkbox;
+  		
+	//处理checkbox点击事件 改变图表显示字段
+	function onClickHander(){		
+		let mCheckBoxs = undefined;
+		mCheckBoxs = document.getElementsByClassName("checkboxs");
+		hideFields = [];//重置
+		for(let key in mCheckBoxs)
+			if(!mCheckBoxs[key].checked)
+				hideFields.push(mCheckBoxs[key].value);//未选中的字段加入
+		
+		addData2chart(jsonArrayData,hideFields);
+	} 
+  let mdiv=document.getElementById("left");
+  addCheckbox(jsonArrayData,mdiv,onClickHander);
   
   // remove button, since re-initializing doesn't work for now
   //uploader.parentNode.removeChild(uploader);
